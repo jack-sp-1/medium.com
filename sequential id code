@@ -1,0 +1,88 @@
+#Difference between row_number and rdd.zipWithIndex 
+#sorting of the data is very important factor when choosing the appropriate method
+from pyspark.sql import Window
+from pyspark.sql.functions import expr
+rows = [[1,2,'@'],[4,5,'_'],[6,7,'+']]
+columns = ['a','b','c']
+df = spark.createDataFrame(rows,columns)
+df.show()
+row_list = df.collect()
+import random
+repeated = random.choice(row_list)
+ 
+# adding a row object to the list
+# n times
+for _ in range(9):
+  row_list.append(repeated)
+#new_df = df.withColumn("b", expr("explode(array_repeat(b,int(b)))"))
+#new_df.show()
+
+# Final DataFrame
+new_df = spark.createDataFrame(row_list)
+ 
+# Result
+#new_df.show()
+
+new_df_orig = new_df.repartition(5)
+new_df_orig = new_df_orig.withColumn("partition",spark_partition_id())
+new_df_orig.rdd.getNumPartitions()
+new_df_orig.show()
++---+---+---+---------+
+|  a|  b|  c|partition|
++---+---+---+---------+
+|  1|  2|  @|        0|
+|  1|  2|  @|        1|
+|  4|  5|  _|        1|
+|  1|  2|  @|        1|
+|  6|  7|  +|        2|
+|  1|  2|  @|        2|
+|  1|  2|  @|        2|
+|  1|  2|  @|        3|
+|  1|  2|  @|        3|
+|  1|  2|  @|        3|
+|  1|  2|  @|        4|
+|  1|  2|  @|        4|
++---+---+---+---------+
+
+# using row_number method
+window_fun = Window.partitionBy('c').orderBy('c')
+new_df_orig_win = new_df_orig.withColumn("rownum_gen",row_number().over(window_fun))
+new_df_orig_win.show()
+
++---+---+---+---------+----------+
+|  a|  b|  c|partition|rownum_gen|
++---+---+---+---------+----------+
+|  6|  7|  +|        2|         1|
+|  1|  2|  @|        0|         1|
+|  1|  2|  @|        1|         2|
+|  1|  2|  @|        1|         3|
+|  1|  2|  @|        2|         4|
+|  1|  2|  @|        2|         5|
+|  1|  2|  @|        3|         6|
+|  1|  2|  @|        3|         7|
+|  1|  2|  @|        3|         8|
+|  1|  2|  @|        4|         9|
+|  1|  2|  @|        4|        10|
+|  4|  5|  _|        1|         1|
++---+---+---+---------+----------+
+
+# using rdd.zipwithindex()
+
+(4) Spark Jobs
+new_df_orig_zip:pyspark.sql.dataframe.DataFrame = [_1: struct, _2: long]
++------------+---+
+|          _1| _2|
++------------+---+
+|{1, 2, @, 0}|  0|
+|{1, 2, @, 1}|  1|
+|{4, 5, _, 1}|  2|
+|{1, 2, @, 1}|  3|
+|{6, 7, +, 2}|  4|
+|{1, 2, @, 2}|  5|
+|{1, 2, @, 2}|  6|
+|{1, 2, @, 3}|  7|
+|{1, 2, @, 3}|  8|
+|{1, 2, @, 3}|  9|
+|{1, 2, @, 4}| 10|
+|{1, 2, @, 4}| 11|
++------------+---+
